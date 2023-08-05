@@ -1,0 +1,135 @@
+---
+title: "PracticalMachineLearningCourseProject"
+author: "Raul Rodrigo Olivarez Jr"
+date: "2023-08-05"
+output:
+  md_document:
+    variant: markdown_github
+---
+
+## Overview
+This serves as the concluding report for the Practical Machine Learning course on Coursera, which is part of the Data Science Specialization track provided by John Hopkins University.
+
+The objective of this project involves utilizing data collected from accelerometers placed on various body parts (belt, forearm, arm, and dumbell) of six participants. The goal is to predict the manner in which these individuals performed their exercises, which is indicated by the "classe" variable within the training dataset.
+
+To achieve this, we employ four distinct models: Decision Tree, Random Forest, and Support Vector Machine. These models are trained using Weka_control as cross-validation on the training dataset. Subsequently, we apply these trained models to a validation dataset, which is randomly extracted from the training CSV data. This step allows us to calculate accuracy. By analyzing these metrics, we determine the optimal model. Once identified, we employ this model to predict outcomes for 20 cases using the test CSV dataset.
+
+
+## Libraries and Set Seed for Reproducibility
+
+```{r}
+
+library(caret)
+library(RWeka)
+library(lattice)
+library(ggplot2)
+
+library(kernlab)
+library(rattle)
+library(corrplot)
+set.seed(1234)
+```
+
+## Load the Dataset
+
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainingcsv <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""),stringsAsFactors = TRUE)
+testingcsv <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""),stringsAsFactors=TRUE)
+```
+
+## Cleaning the Data 
+
+Removing unnecessary variables (N/A) and columns which are irrelevant when creating the model
+
+```{r}
+trainingcsv <- trainingcsv[,colMeans(is.na(trainingcsv)) < .9]
+trainingcsv <- trainingcsv[,-c(1:7)] 
+dim(trainingcsv)
+```
+
+Splitting the training dataset into sub-training and validation sets. The testing csv file will be utilized for the quiz cases.
+
+```{r}
+inTrain <- createDataPartition(y=trainingcsv$classe, p=0.7, list=F)
+training <- trainingcsv[inTrain,]
+validation <- trainingcsv[-inTrain,]
+```
+
+
+# Creating and Testing Models
+We will be using some of the popular models such as Random Forest, SVM, Decision Trees and Gradient Boosted Trees and compare them which of them best fits.
+
+## Random Forest
+
+```{r}
+RF <- make_Weka_classifier("weka/classifiers/trees/RandomForest")
+rfmodel <- RF(classe~ ., data=training, control = Weka_control(K=floor(2*sqrt(18))))
+predrfmodel <- predict(rfmodel, validation)
+cmrf <- confusionMatrix(predrfmodel, factor(validation$classe))
+cmrf
+```
+
+# Support Vector Machine
+
+```{r}
+SVMModel <- SMO(classe ~., data=training, control = Weka_control(C='1', K = list("PolyKernel", E = 2)))
+predSVMModel <- predict(SVMModel, validation)
+cmSVM <- confusionMatrix(predSVMModel, factor(validation$classe))
+cmSVM
+```
+
+
+# Decision Trees
+
+```{r}
+DecisionTreeModel <- train(classe ~ .,method="rpart",data=training)
+fancyRpartPlot(DecisionTreeModel$finalModel)
+predDecisionTreeModel <- predict(DecisionTreeModel, validation)
+cmdt <- confusionMatrix(predDecisionTreeModel, factor(validation$classe))
+cmdt
+```
+
+
+Among the three, the best model is the Random Forest, with 99.56% accuracy that we can estimate to be our out-of-sample error. When the model was fitted using the training data, it lead to a 100% accuracy which we can assume as our in-sample error. Thus, this is a good model to use for our test sets.
+
+### Random Forest using Training
+```{r}
+predrfmodeltr <- predict(rfmodel, training)
+cmrftr <- confusionMatrix(predrfmodeltr, factor(training$classe))
+cmrftr
+```
+
+### Random Forest using Validation
+```{r}
+predrfmodel <- predict(rfmodel, validation)
+cmrf <- confusionMatrix(predrfmodel, factor(validation$classe))
+cmrf
+```
+
+# Final Prediction for the Test
+
+Executing the Random Forest model on our test set to forecast the outcome of the "classe" variable (with 5 possible levels) for a total of 20 cases.
+
+```{r}
+predRFtest <- predict(rfmodel, testingcsv)
+print(predRFtest)
+```
+
+
+# Generating Files for Quiz Submission
+
+```{r}
+pml_write_files = function(x) {
+  n = length(x)
+  for (i in 1:n) {
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file=filename, quote=FALSE,row.names=FALSE, col.names=FALSE)
+  }
+}
+
+pml_write_files(predRFtest)
+```
+
+
